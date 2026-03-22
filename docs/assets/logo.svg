@@ -1,37 +1,41 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
   <defs>
-    <linearGradient id="claudeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#D4A27F;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#C4916A;stop-opacity:1" />
+    <!-- Orange gradient (Claude) -->
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F79847"/>
+      <stop offset="100%" stop-color="#E56E53"/>
     </linearGradient>
-    <linearGradient id="codexGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#7AA2F7;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#5C7FD9;stop-opacity:1" />
+
+    <!-- Blue gradient (Codex) -->
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8A8FEA"/>
+      <stop offset="100%" stop-color="#616AC1"/>
     </linearGradient>
   </defs>
 
-  <!-- Background circle -->
-  <circle cx="100" cy="100" r="95" fill="#1a1a2e" stroke="#2d2d44" stroke-width="2"/>
+  <!-- Background -->
+  <rect width="200" height="200" rx="24" fill="#020025"/>
 
-  <!-- Claude circle (left) -->
-  <circle cx="65" cy="100" r="40" fill="url(#claudeGrad)" opacity="0.9"/>
+  <!-- Top arc (orange - Claude) -->
+  <path d="M 40 55 Q 100 25 160 55"
+        stroke="url(#orangeGrad)"
+        stroke-width="8"
+        fill="none"
+        stroke-linecap="round"/>
 
-  <!-- Codex circle (right) -->
-  <circle cx="135" cy="100" r="40" fill="url(#codexGrad)" opacity="0.9"/>
+  <!-- Bottom arc (blue - Codex) -->
+  <path d="M 40 75 Q 100 105 160 75"
+        stroke="url(#blueGrad)"
+        stroke-width="8"
+        fill="none"
+        stroke-linecap="round"/>
 
-  <!-- Overlap area highlight -->
-  <ellipse cx="100" cy="100" rx="15" ry="30" fill="#9B7FD1" opacity="0.6"/>
+  <!-- duet text -->
+  <text x="100" y="155"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="48"
+        font-weight="bold"
+        fill="#F8F8F9"
+        text-anchor="middle">duet</text>
 
-  <!-- Claude icon (abstract C) -->
-  <text x="52" y="108" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#1a1a2e">C</text>
-
-  <!-- Codex icon (abstract X) -->
-  <text x="122" y="108" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#1a1a2e">X</text>
-
-  <!-- Connection lines -->
-  <path d="M 85 70 Q 100 50 115 70" stroke="#ffffff" stroke-width="2" fill="none" opacity="0.5"/>
-  <path d="M 85 130 Q 100 150 115 130" stroke="#ffffff" stroke-width="2" fill="none" opacity="0.5"/>
-
-  <!-- Arrow indicating flow -->
-  <path d="M 100 160 L 100 180 M 90 170 L 100 180 L 110 170" stroke="#ffffff" stroke-width="2" fill="none" opacity="0.7"/>
 </svg>
