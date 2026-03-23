@@ -36,32 +36,40 @@ digraph duet_workflow {
     rankdir=TB;
 
     "1. Claude: 规划" [shape=box style=filled fillcolor="#D4A27F"];
-    "2. Codex: 审核 + 建议切分" [shape=box style=filled fillcolor="#7AA2F7"];
+    "2. Codex: 审核" [shape=box style=filled fillcolor="#7AA2F7"];
     "审核结果" [shape=diamond];
     "3. Claude: 切分任务" [shape=box style=filled fillcolor="#D4A27F"];
     "4. 用户: 确认" [shape=diamond];
     "5. Codex: 执行" [shape=box style=filled fillcolor="#7AA2F7"];
 
-    "1. Claude: 规划" -> "2. Codex: 审核 + 建议切分";
-    "2. Codex: 审核 + 建议切分" -> "审核结果";
-    "审核结果" -> "3. Claude: 切分任务" [label="通过"];
-    "审核结果" -> "1. Claude: 规划" [label="大问题\n人工介入"];
-    "审核结果" -> "2. Codex: 审核 + 建议切分" [label="小问题\n自动修复"];
+    "1. Claude: 规划" -> "2. Codex: 审核";
+    "2. Codex: 审核" -> "审核结果";
+    "审核结果" -> "3. Claude: 切分任务" [label="PASS/FIXED"];
+    "审核结果" -> "用户决定" [label="NEEDS_HUMAN"];
+    "用户决定" -> "1. Claude: 规划" [label="重新规划"];
+    "用户决定" -> "3. Claude: 切分任务" [label="选择方案"];
     "3. Claude: 切分任务" -> "4. 用户: 确认";
     "4. 用户: 确认" -> "5. Codex: 执行" [label="确认"];
     "4. 用户: 确认" -> "3. Claude: 切分任务" [label="调整"];
 }
 ```
 
+**核心原则：一次审核，能解即解**
+
+- PASS → 无问题，继续
+- FIXED → Codex 已解决，继续（回复中说明解决方案）
+- NEEDS_HUMAN → 需人工决定，暂停给用户
+
 ### 流程阶段
 
 | 阶段 | 执行者 | 输入 | 输出 |
 |------|--------|------|------|
 | 1. 规划 | Claude | 用户需求 | 规划文档（含参考文件） |
-| 2. 审核 | Codex | 规划文档 | 审核结果 + 切分建议 |
-| 3. 切分 | Claude | 审核建议 + 规划 | 任务设计文档 |
-| 4. 确认 | 用户 | 任务列表 | 确认/调整 |
-| 5. 执行 | Codex | 任务设计文档 | 实现代码 |
+| 2. 审核 | Codex | 规划文档 | PASS / FIXED / NEEDS_HUMAN + 切分建议 |
+| 3. 处理结果 | Claude | 审核结果 | 继续流程 或 询问用户 |
+| 4. 切分 | Claude | 审核建议 + 规划 | 任务设计文档 |
+| 5. 确认 | 用户 | 任务列表 | 确认/调整 |
+| 6. 执行 | Codex | 任务设计文档 | 实现代码 |
 
 ---
 
@@ -120,6 +128,12 @@ digraph duet_workflow {
 
 ## 阶段 2：Codex 审核
 
+**核心原则：一次审核，能解即解**
+
+Codex 审核时发现问题：
+- **能解决** → 直接在审核结果中给出解决方案，继续流程
+- **需人工决定** → 返回给 Claude，由 Claude 询问用户
+
 ### 调用命令
 
 规划完成后，调用 Codex 进行审核：
@@ -144,11 +158,15 @@ Review the design document at docs/superpowers/specs/xxx-design.md
 
 ## 输出格式
 
-REVIEW_RESULT: PASS | NEEDS_FIX
+REVIEW_RESULT: PASS | FIXED | NEEDS_HUMAN
 
-ISSUES:
-- [问题1描述] - SEVERITY: LOW | MEDIUM | HIGH
-- [问题2描述] - SEVERITY: LOW | MEDIUM | HIGH
+FIXES_APPLIED:  # 仅当 REVIEW_RESULT 为 FIXED 时填写
+- 问题: [问题描述] → 解决: [解决方案描述]
+- 问题: [问题描述] → 解决: [解决方案描述]
+
+HUMAN_DECISION_NEEDED:  # 仅当 REVIEW_RESULT 为 NEEDS_HUMAN 时填写
+- [需要人工决定的问题1]
+- [需要人工决定的问题2]
 
 SPLIT_SUGGESTION:
 - Task 1: [任务名称] - [简要描述] - 依赖: 无
@@ -157,6 +175,12 @@ SPLIT_SUGGESTION:
 
 COMMENTS:
 [其他建议或观察]
+
+## 重要说明
+
+- 能自行解决的问题，直接在 FIXES_APPLIED 中说明用什么方法解决了什么问题
+- 只有真正需要用户决策的问题才返回 NEEDS_HUMAN（如：多种方案各有优劣、涉及业务逻辑选择等）
+- 不会重新审核，请一次审核完整
 "
 ```
 
@@ -164,33 +188,36 @@ COMMENTS:
 
 解析 Codex 的输出：
 
-- `REVIEW_RESULT`：决定是否需要修复
-- `ISSUES` + `SEVERITY`：用于问题分级
+- `REVIEW_RESULT`：
+  - `PASS` → 无问题，继续切分
+  - `FIXED` → Codex 已解决发现的问题，查看 FIXES_APPLIED 了解详情，继续切分
+  - `NEEDS_HUMAN` → 需要人工决定，暂停流程
+- `FIXES_APPLIED`：Codex 解决了哪些问题，用什么方法
+- `HUMAN_DECISION_NEEDED`：需要用户决定的问题列表
 - `SPLIT_SUGGESTION`：用于指导任务切分
 
 ---
 
-## 阶段 3：问题分级与处理
+## 阶段 3：处理 Codex 审核结果
 
-### 分级规则
+### 三种结果的处理
 
-| 级别 | 定义 | 示例 | 处理方式 |
-|------|------|------|----------|
-| **LOW** | 格式/命名/文档问题 | 错别字、命名不一致、缺少示例 | Claude 自动修复，重新提交审核 |
-| **MEDIUM** | 需要澄清但不阻塞 | 边界情况未覆盖、可选参数缺失 | Claude 自动补充，重新提交审核 |
-| **HIGH** | 核心逻辑/架构问题 | 技术不可行、与现有代码冲突、架构缺陷 | 暂停，用户决定如何修改 |
+| 结果 | 含义 | 处理方式 |
+|------|------|----------|
+| `PASS` | 规划没问题 | 直接进入切分阶段 |
+| `FIXED` | Codex 已解决问题 | 记录 FIXES_APPLIED 到任务文档，继续流程 |
+| `NEEDS_HUMAN` | 需要人工决定 | 暂停，询问用户 |
 
-### 处理流程
+### NEEDS_HUMAN 的处理
 
-1. 检查审核结果中的 `SEVERITY`
-2. 如果有任何 `HIGH` 级别问题 → 暂停，展示给用户
-3. 如果只有 `LOW`/`MEDIUM` → Claude 自动修复
-4. 修复后重新提交审核
+当 Codex 返回 `NEEDS_HUMAN` 时：
 
-### 自动修复循环上限
-
-- 最多自动修复 **3 次**
-- 超过 3 次仍有问题，转为人工介入
+1. 向用户展示 `HUMAN_DECISION_NEEDED` 中的问题
+2. 提供可选方案（如有）
+3. 等待用户决定：
+   - **选择方案** → 继续流程
+   - **重新规划** → 返回阶段 1
+   - **取消** → 终止工作流
 
 ---
 
@@ -356,22 +383,19 @@ CONCERNS: [如有问题或疑虑]
 **绝不**：
 
 - 跳过 Codex 审核阶段
-- 忽略 HIGH 级别问题
+- 忽略 NEEDS_HUMAN（必须询问用户）
 - 在用户确认前开始执行
 - 让 Codex 执行没有设计文档的任务
-- 超过 3 次自动修复循环
+- 反复审核（一次审核，能解即解）
 
-**如果 Codex 返回 BLOCKED**：
-
-- 分析阻塞原因
-- 不要强制重试
-- 人工介入解决问题
-
-**如果审核发现 HIGH 问题**：
+**如果 Codex 返回 NEEDS_HUMAN**：
 
 - 暂停工作流
-- 向用户清晰展示问题
-- 等待用户决定
+- 向用户清晰展示需要决定的问题
+- 提供可选方案（如有）
+- 等待用户选择后继续
+
+**如果 Codex 返回 BLOCKED**：
 
 ---
 
@@ -380,7 +404,8 @@ CONCERNS: [如有问题或疑虑]
 | 阶段 | 命令/动作 |
 |------|----------|
 | 规划 | 创建 `docs/superpowers/specs/xxx-design.md` |
-| 审核 | `codex exec "Review..."` |
+| 审核 | `codex exec "Review..."` → PASS / FIXED / NEEDS_HUMAN |
+| 处理结果 | PASS/FIXED 继续，NEEDS_HUMAN 询问用户 |
 | 切分 | 创建 `docs/superpowers/tasks/xxx/` 目录和任务文档 |
 | 确认 | 向用户展示任务列表 |
 | 执行 | `codex exec "Execute task..."` |
