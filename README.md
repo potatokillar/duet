@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="Duet Logo" width="180">
+  <img src="docs/assets/logo.svg" alt="Duet Logo" width="180">
 </p>
 
 <h1 align="center">Duet</h1>
